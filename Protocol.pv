@@ -1,0 +1,248 @@
+
+
+free Sat_MU:channel.
+free Sat_CN_reg:channel [private].
+free CN_MU_reg:channel [private].
+free UE_TA_reg:channel [private].
+free Sat_MU_sec:channel [private].
+free MEC_UE_reg:channel [private].
+free Cloud_MEC_reg:channel [private].
+free Cloud_MEC:channel [private].
+
+
+
+type skey.
+type pkey.
+type G.
+type signkey.
+type verifykey.
+type sskey.
+
+const g:G [data].
+
+const T: bitstring.
+fun frbshnbss(bitstring, bool): bool 
+reduc forall T: bitstring; frbshnbss(T, true) = true.
+
+
+
+
+free session_key:bitstring [private].
+free GroupKey:bitstring [private].
+free c_mu:skey [private].
+free sk_sat:skey [private].
+
+
+
+event begin_CN_Sat().
+event end_CN_Sat(skey).
+event begin_CN_MU().
+event end_CN_MU(bitstring).
+
+event begin_Boot().
+event end_Boot(bitstring).
+
+
+event begin_Auth(bitstring).
+event end_Auth(bitstring).
+
+
+(* Public key gen 公钥生成 *)
+fun ARIS(skey):pkey.
+fun gen(bitstring, G):G.
+fun add(G,G):pkey.
+fun exp(bitstring):bitstring.
+fun sum(bitstring,bitstring):bitstring.
+fun sum2(bitstring,bitstring):skey.
+fun genID(bitstring,bitstring):bitstring.
+fun sign(bitstring, bitstring, skey):bitstring.
+
+fun CRT_Gen(sskey,bitstring):bitstring.
+reduc forall group_sky:sskey, group_di:bitstring; CRT_Verify(CRT_Gen(group_sky, group_di), group_di)=group_sky.
+
+
+fun gen_signkey(skey,bitstring):signkey.
+fun gen_sign(bitstring,  signkey):bitstring.
+fun gen_verifykey(signkey):verifykey. 
+reduc forall x:bitstring,sk:signkey;gen_verify(gen_sign(x,sk),gen_verifykey(sk))=x.
+
+fun Concat2(bitstring, bitstring):bitstring.
+reduc forall m3:bitstring, m4:bitstring; First(Concat2(m3,m4)) = m3.
+reduc forall m3:bitstring, m4:bitstring; Second(Concat2(m3,m4)) = m4.
+
+fun gen2(bitstring,pkey):G.
+fun gen3(skey,pkey):G.
+
+(* XOR*)
+fun XOR(bitstring,bitstring):bitstring.
+reduc forall x:bitstring, y:bitstring; dXOR(XOR(x,y),y)=x.
+
+fun h0(bitstring, pkey):bitstring.
+fun h1(bitstring,bitstring,G,bitstring):bitstring.
+fun h2(bitstring, bitstring, G):bitstring.
+fun h3(bitstring,G):bitstring.
+fun h4(bitstring,bitstring):bitstring.
+fun h5(G):bitstring.
+fun h6(bitstring,bitstring,bitstring,bitstring, pkey, bitstring):bitstring.
+fun h7(bitstring,pkey):bitstring.
+fun h8(G,G,sskey):bitstring.
+fun h9(bitstring,bitstring,bitstring):bitstring.
+fun h10(sskey, G,bitstring,bitstring):bitstring.
+
+query attacker(GroupKey).
+query attacker(session_key).
+query attacker(sk_sat).
+query attacker(c_mu).
+
+query x:bitstring; inj-event(end_Boot(x)) ==> inj-event(begin_Boot()).
+query x:bitstring, y:bitstring; inj-event(end_Auth(x)) ==> inj-event(begin_Auth(y)).
+query x:bitstring, y:bitstring; inj-event(end_Auth(x)) && inj-event(begin_Auth(y)) ==> x=y.
+
+
+(* Operations *)
+let MUs()=
+    new ID_MU:bitstring;
+    event begin_CN_MU();
+    out(CN_MU_reg, ID_MU);
+    in(CN_MU_reg,(r_K_j:bitstring, r_psk:pkey,r_Y_Sat:G));
+
+    event end_CN_MU(r_K_j);
+
+    in(Sat_MU,((r_MIB:bitstring, r_SIB:bitstring, r_ID_Sat:bitstring,r_Sign:bitstring, r_pk_sat:pkey,r_s_sat:bitstring, r_e_sat:bitstring,r_R_Sat:G,r_T:bitstring),checkT:bool));
+    in (Sat_MU_sec, (r_sk_sat:skey, r_r_Sat:bitstring));
+    
+    if checkT = true then
+        let j_MU =h0(r_ID_Sat, r_pk_sat) in
+        let S_sat = gen(r_e_sat,g )in 
+        let mu_sign_key = gen_signkey(r_sk_sat,r_r_Sat) in 
+        let mu_verifykey =gen_verifykey(mu_sign_key) in 
+        let mu_msg = gen_verify(r_Sign, mu_verifykey ) in 
+        let mu_R = gen(r_r_Sat,g) in 
+        let mu_MIB = First(mu_msg) in
+        let mu_SIB = Second(mu_msg) in 
+        let mu_hash = h2(mu_MIB, mu_SIB, mu_R) in 
+        let e_sat = h2(r_SIB, r_MIB, r_R_Sat) in 
+        if e_sat = mu_hash then
+            event end_Boot(mu_hash);
+
+            new c_mu:skey;
+            new gama_j:bitstring;
+
+            let C_mu = ARIS(c_mu) in
+            let t_mu = h4(ID_MU,r_K_j) in 
+            let auth_j = h4(r_K_j, t_mu) in 
+            let mu_cpk = gen3(c_mu, r_pk_sat) in 
+            let mu_hash_cpk = h5(mu_cpk) in 
+            let m_1_mu = XOR(gama_j,mu_hash_cpk) in 
+            let hash_mu_msg= h6(ID_MU, t_mu, gama_j, auth_j, C_mu, T) in 
+            event begin_Auth(hash_mu_msg);
+
+            out (Sat_MU,((ID_MU, t_mu, C_mu, auth_j, hash_mu_msg,m_1_mu,T), frbshnbss(T,true)));
+
+
+            in(Sat_MU, ((r_gorup_key:bitstring,r_msg_hash:bitstring,r_MAC_sat:bitstring,r_T:bitstring), checkT:bool));
+
+            if checkT=true then
+                let mu_session = CRT_Verify(r_gorup_key, gama_j) in 
+                let mu_hash = h10(mu_session,r_R_Sat, r_MAC_sat, r_T) in 
+                if mu_hash = r_msg_hash then
+                    let session_key = h8(r_R_Sat, mu_cpk,mu_session ) in 
+                    let mu_mac = h4(ID_MU, session_key) in 
+                    if mu_mac = r_MAC_sat then
+                        (* AKA finished*)
+                        event end_Auth(mu_mac);
+                        0.
+
+let Sat()=
+    new ID_Sat:bitstring;
+    event begin_CN_Sat();
+    new alpha:bitstring;
+    let U_sat = gen(alpha,g) in
+    out(Sat_CN_reg,(ID_Sat, U_sat));
+    in(Sat_CN_reg, (w:bitstring, r_pk_sat:pkey));
+    let sk_sat = sum2(w,alpha) in 
+    let pk_sat = ARIS(sk_sat) in 
+    event end_CN_Sat(sk_sat);
+
+    (* Bootstrapping authentication *)
+    event begin_Boot();
+    new r_Sat:bitstring;
+    let R_Sat = gen(r_Sat,g) in
+    new SIB:bitstring;
+    new MIB:bitstring;
+    let sign_key = gen_signkey(sk_sat,r_Sat) in
+    let msg = Concat2(MIB,SIB) in 
+    let Sign = gen_sign(msg, sign_key) in 
+    let e_sat = h3(msg,R_Sat) in
+    let s_sat = sign(r_Sat, e_sat, sk_sat) in
+    out (Sat_MU,((MIB, SIB, ID_Sat,Sign, pk_sat,s_sat,e_sat,R_Sat,T), frbshnbss(T,true)));
+    out (Sat_MU_sec, (sk_sat, r_Sat));
+
+    (* AKA *)
+    
+    in(Sat_MU,(( r_ID_MU:bitstring, r_t_mu:bitstring, r_C_mu:pkey, r_auth_j:bitstring, r_hash_mu_msg:bitstring, r_m_1_mu:bitstring, r_T:bitstring),checkT:bool));
+    if checkT = true then
+        let mu_cpk = gen3( sk_sat, r_C_mu) in 
+        let mu_hash_cpk = h5(mu_cpk) in 
+        let sat_gamma_j = dXOR(r_m_1_mu, mu_hash_cpk ) in 
+        let hash_mu_msg= h6(r_ID_MU, r_t_mu, sat_gamma_j, r_auth_j, r_C_mu, r_T) in
+        if hash_mu_msg = r_hash_mu_msg then
+            let h_Sat = h9(r_ID_MU, r_auth_j, T) in 
+            out(Sat_CN_reg,((r_ID_MU, r_auth_j, h_Sat,T), frbshnbss(T,true)));
+
+            in(Sat_CN_reg,(r_K_j:bitstring, r_phi:bitstring));
+
+            let t_mu = h4(r_ID_MU, r_K_j) in 
+            let auth_j = h4(r_K_j, t_mu) in 
+            if auth_j = r_auth_j then
+                
+                new GroupKey :sskey;
+                let gorup_key = CRT_Gen(GroupKey, sat_gamma_j) in 
+                let session_sat = h8(R_Sat, mu_cpk,GroupKey ) in 
+                let MAC_sat = h4(r_ID_MU,session_sat) in
+                let msg_hash = h10(GroupKey,R_Sat, MAC_sat, T) in 
+                out(Sat_MU, ((gorup_key,msg_hash,MAC_sat,T), frbshnbss(T,true)));
+                0.
+
+let CN()=
+	new pp:bitstring;
+	new msk:skey; 
+
+    let (psk:pkey) = ARIS(msk) in 
+
+
+    (*Sat*)
+    in (Sat_CN_reg, (r_ID_Sat:bitstring, r_U_sat:G));
+    new x_sat:bitstring;
+    let X_sat=gen(x_sat, g) in 
+    let pk_sat = add(r_U_sat, X_sat) in 
+    let j =h7(r_ID_Sat, pk_sat) in
+    new v_j :bitstring;
+    let y = exp(v_j) in 
+    let Y = gen(v_j,g)in 
+    let w = sum(y, x_sat) in 
+    out (Sat_CN_reg, (w, pk_sat));
+
+    (*MU*)
+    in(CN_MU_reg, (r_ID_UE:bitstring));
+    new K_j : bitstring;
+    let T_ID_MU = genID(r_ID_Sat, K_j) in
+    out (CN_MU_reg, (K_j, psk,Y));
+
+
+    in(Sat_CN_reg,((r_r_ID_MU:bitstring, r_r_auth_j:bitstring, h_Sat:bitstring, r_T:bitstring),checkT:bool));
+    if checkT = true then
+        let h_CN = h9(r_r_ID_MU, r_r_auth_j, r_T) in 
+        if h_CN = h_Sat then
+            let t_mu = h4(r_r_ID_MU, K_j) in 
+            let auth_j = h4(K_j, t_mu) in 
+            if auth_j = r_r_auth_j then
+                new phi:bitstring;
+                out(Sat_CN_reg,(K_j, phi));
+                0.
+
+(* Main procbss *)
+process
+
+	(* Execution of the protocol *)
+	( (MUs()) | (Sat()) | (CN()) )
