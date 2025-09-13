@@ -24,13 +24,12 @@ The following security properties have been formally verified using ProVerif:
 ---
 
 ## 📁 Repository Structure
-
 .
-├── protocol.pv           # Main ProVerif code: protocol model and security queries
-├── README.md             # This file
+├── Protocol.pv           # Main ProVerif code: protocol model and security queries
+└── README.md             # This file
 
 
-- `protocol.pv`: The core ProVerif script defining:
+- `Protocol.pv`: The core ProVerif script defining:
   - Cryptographic primitives (signatures, hash functions, etc.)
   - Protocol roles (Satellite, Mobile User, CN )
   - Message flows
