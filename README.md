@@ -25,7 +25,7 @@ The following security properties have been formally verified using ProVerif:
 
 ## 📁 Repository Structure
 .
-├── Protocol.pv           # Main ProVerif code: protocol model and security queries
+├── Protocol.pv           # Main ProVerif code: protocol model and security queries  
 └── README.md             # This file
 
 
